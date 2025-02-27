@@ -12,70 +12,97 @@ public class FPSShooter : MonoBehaviour
     public float fireRate = 4; // Rate of fire
     public float arcRange = 1; // Range of the arc
 
-    public GameObject projectile;
+    public List<GameObject> projectiles; // List of different spells
+    private int currentSpellIndex = 0; // Index to track the current spell
+
     public Transform LHFirePoint, RHFirePoint; // Left Hand and Right Hand Fire Points
+
+    public AudioSource audioSource;
+    public List<AudioClip> shootSounds; // List of sounds for different spells
 
     public float projectileSpeed = 30f; // Speed of the projectile
 
-
+    public List<GameObject> LH_MuzzleFlashes, RH_MuzzleFlashes; // Muzzle Flashes for different spells
 
     void Update()
     {
-        if (Input.GetButton("Fire1") && Time.time >= timeToFire) // Left mouse button pressed
+        if (Input.GetButton("Fire1") && Time.time >= timeToFire)
         {
-            timeToFire = Time.time + 1 / fireRate; // Set the time to fire the next projectile
+            timeToFire = Time.time + 1 / fireRate;
             ShootProjectile();
+        }
+
+        if (Input.GetKeyDown(KeyCode.Q)) // Switch spells
+        {
+            SwitchSpell();
         }
     }
 
     void ShootProjectile()
     {
-        // Create a ray from the center of the camera
-        Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0)); // Center of the screen
+        Ray ray = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0));
         RaycastHit hit;
 
-        // Check for a hit
         if (Physics.Raycast(ray, out hit))
         {
-            destination = hit.point; // Set destination to the hit point
+            destination = hit.point;
         }
         else
         {
-            destination = ray.GetPoint(1000); // Set destination far away if no hit
+            destination = ray.GetPoint(1000);
         }
 
-        // Alternate between left hand and right hand
         if (leftHand)
         {
-            leftHand = false; // Toggle the hand
+            leftHand = false;
             InstantiateProjectile(LHFirePoint);
+            PlayMuzzleFlash(LH_MuzzleFlashes[currentSpellIndex]);
         }
         else
         {
-            leftHand = true; // Toggle the hand
+            leftHand = true;
             InstantiateProjectile(RHFirePoint);
+            PlayMuzzleFlash(RH_MuzzleFlashes[currentSpellIndex]);
         }
     }
 
     void InstantiateProjectile(Transform firePoint)
     {
-        // Create the projectile
-        var projectileObj = Instantiate(projectile, firePoint.position, Quaternion.identity) as GameObject;
+        var projectileObj = Instantiate(projectiles[currentSpellIndex], firePoint.position, Quaternion.identity);
+        ProjectileSound();
 
-        // Calculate the direction based on the camera's orientation
         Vector3 direction = (destination - firePoint.position).normalized;
-
-        // Apply velocity to the projectile's Rigidbody
         Rigidbody rb = projectileObj.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.velocity = direction * projectileSpeed; // Move the projectile toward the target
+            rb.velocity = direction * projectileSpeed;
         }
 
-        // Add a random arc to the projectile
         iTween.PunchPosition(projectileObj, new Vector3(Random.Range(-arcRange, arcRange), Random.Range(-arcRange, arcRange), 0), Random.Range(0.5f, 2));
-
-        // Destroy the projectile after 10 seconds if it doesn't collide
         Destroy(projectileObj, 5f);
+    }
+
+    void ProjectileSound()
+    {
+        if (shootSounds.Count > currentSpellIndex && shootSounds[currentSpellIndex] != null)
+        {
+            audioSource.PlayOneShot(shootSounds[currentSpellIndex]);
+        }
+    }
+
+    void PlayMuzzleFlash(GameObject muzzleFlash)
+    {
+        ParticleSystem[] particleSystems = muzzleFlash.GetComponentsInChildren<ParticleSystem>();
+        foreach (var ps in particleSystems)
+        {
+            ps.Stop();
+            ps.Play();
+        }
+    }
+
+    void SwitchSpell()
+    {
+        currentSpellIndex = (currentSpellIndex + 1) % projectiles.Count;
+        Debug.Log("Switched to spell: " + currentSpellIndex);
     }
 }

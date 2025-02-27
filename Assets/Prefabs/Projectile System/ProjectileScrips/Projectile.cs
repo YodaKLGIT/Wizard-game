@@ -4,35 +4,87 @@ using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
-    public GameObject impactVFX; // Impact effect prefab
-    private bool collided; // Tracks if the projectile has collided
+    public GameObject impactVFX;
+    public AudioClip impactSound;
+    private bool collided;
+    public float damage = 20f;
+
+    public bool isPlayerProjectile; // Check if the projectile was fired by the player
 
     void OnCollisionEnter(Collision co)
     {
-        if (co.gameObject.tag != "Bullet" && co.gameObject.tag != "Player" && !collided)
+        if (!collided)
         {
             collided = true;
 
-            ContactPoint contact = co.contacts[0]; // Get the first contact point
-            Vector3 impactPosition = contact.point + contact.normal * 0.1f; // Offset to avoid clipping
-            Quaternion impactRotation = Quaternion.LookRotation(contact.normal); // Orient along the normal
+            // Only apply damage to the player or enemy
+            if (co.gameObject.CompareTag("Enemy") && isPlayerProjectile)
+            {
+                // Player projectile hits the enemy
+                EnemyAI enemy = co.gameObject.GetComponent<EnemyAI>();
+                if (enemy != null)
+                {
+                    enemy.TakeDamage(damage);
+                }
+            }
+            else if (co.gameObject.CompareTag("Player") && !isPlayerProjectile)
+            {
+                // Enemy projectile hits the player
+                PlayerStats player = co.gameObject.GetComponent<PlayerStats>();
+                if (player != null)
+                {
+                    player.TakeDamage(damage);
+                }
+            }
 
-            var impact = Instantiate(impactVFX, impactPosition, impactRotation); // Spawn effect properly
+            // Handle the parry logic (when projectiles hit each other)
+            else if (co.gameObject.CompareTag("Projectile"))
+            {
+                Projectile otherProjectile = co.gameObject.GetComponent<Projectile>();
+                if (otherProjectile != null && isPlayerProjectile != otherProjectile.isPlayerProjectile)
+                {
+                    // Parry triggered, heal player and play the parry sound
+                    if (isPlayerProjectile)
+                    {
+                        PlayerStats player = FindObjectOfType<PlayerStats>();
+                        if (player != null)
+                        {
+                            player.Parry(); // Heal the player upon successful parry
 
-            // Ensure the impact has a particle system
+                    
+                        }
+                    }
+                    // Destroy both projectiles on parry
+                    Destroy(otherProjectile.gameObject);
+                    Destroy(gameObject);
+                }
+            }
+
+            // Create impact effect
+            ContactPoint contact = co.contacts[0];
+            Vector3 impactPosition = contact.point + contact.normal * 0.1f;
+            Quaternion impactRotation = Quaternion.LookRotation(contact.normal);
+            var impact = Instantiate(impactVFX, impactPosition, impactRotation);
+
+            // Play impact sound
+            if (impactSound != null)
+            {
+                AudioSource.PlayClipAtPoint(impactSound, impactPosition);
+            }
+
+            // Destroy the VFX after the particle system finishes
             ParticleSystem ps = impact.GetComponent<ParticleSystem>();
             if (ps != null)
             {
-                // Destroy impact after the particle system's lifetime ends
                 Destroy(impact.gameObject, ps.main.duration + ps.main.startLifetime.constantMax);
             }
             else
             {
-                // Fallback in case there's no ParticleSystem (just destroy it after 1 second)
-                Destroy(impact.gameObject, 1f);
+                Destroy(impact.gameObject, 1f); // Default to 1 second if no ParticleSystem
             }
 
-            Destroy(gameObject); // Destroy the projectile itself
+            // Destroy the projectile itself after collision
+            Destroy(gameObject);
         }
     }
 }
